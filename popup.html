@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      width: 360px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #333;
+      background: #f8f9fa;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .tab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      background: #e8e8e8;
+      color: #666;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: #1976d2;
+      color: white;
+    }
+    .panel {
+      display: none;
+    }
+    .panel.active {
+      display: block;
+    }
+    .status-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+    }
+    .status-label {
+      color: #666;
+      font-size: 12px;
+    }
+    .status-value {
+      font-weight: 500;
+      font-size: 12px;
+    }
+    .status-value.ok { color: #2e7d32; }
+    .status-value.warn { color: #f57c00; }
+    .status-value.error { color: #c62828; }
+    .status-value.inactive { color: #999; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    button {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button:active { opacity: 0.7; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-upload { background: #1976d2; color: white; }
+    .btn-download { background: #2e7d32; color: white; }
+    .btn-add { background: #1976d2; color: white; font-size: 12px; padding: 8px 12px; }
+    .btn-danger { background: #c62828; color: white; font-size: 11px; padding: 4px 8px; flex: none; }
+    .site-list {
+      list-style: none;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .site-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 12px;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+    .site-item:last-child { border-bottom: none; }
+    .site-item .url { flex: 1; word-break: break-all; }
+    .add-site {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .add-site input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+    }
+    .add-site input:focus {
+      border-color: #1976d2;
+    }
+    .message {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+    .message.show { display: block; }
+    .message.success { background: #e8f5e9; color: #2e7d32; }
+    .message.error { background: #fbe9e7; color: #c62828; }
+    .message.info { background: #e3f2fd; color: #1565c0; }
+    .hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔄 LocalStorage Sync</h1>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="status">同步状态</button>
+    <button class="tab" data-panel="sites">站点管理</button>
+  </div>
+
+  <!-- 同步状态面板 -->
+  <div class="panel active" id="panel-status">
+    <div class="status-card">
+      <div class="status-row">
+        <span class="status-label">当前页面</span>
+        <span class="status-value" id="currentSite">-</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">同步状态</span>
+        <span class="status-value" id="siteActive">-</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">云端数据</span>
+        <span class="status-value" id="syncStatus">检查中...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">上次同步</span>
+        <span class="status-value" id="lastSync">-</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">数据大小</span>
+        <span class="status-value" id="dataSize">-</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Key 数量</span>
+        <span class="status-value" id="keyCount">-</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-upload" id="btnUpload">⬆ 上传到云端</button>
+      <button class="btn-download" id="btnDownload">⬇ 下载到本地</button>
+    </div>
+
+    <div class="message" id="message"></div>
+  </div>
+
+  <!-- 站点管理面板 -->
+  <div class="panel" id="panel-sites">
+    <ul class="site-list" id="siteList"></ul>
+
+    <div class="add-site">
+      <input type="text" id="newSiteInput" placeholder="输入站点 origin，如 http://localhost:8080">
+      <button class="btn-add" id="btnAddSite">添加</button>
+    </div>
+
+    <div class="hint">
+      添加需要同步 localStorage 的站点地址。<br>
+      格式：协议+域名+端口，如 https://example.com 或 http://localhost:3000<br>
+      所有添加的站点将共享同一份 localStorage 数据。
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
