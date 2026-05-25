@@ -12,6 +12,8 @@ const currentSiteEl = document.getElementById('currentSite');
 const siteActiveEl = document.getElementById('siteActive');
 const btnUpload = document.getElementById('btnUpload');
 const btnDownload = document.getElementById('btnDownload');
+const btnClearCloud = document.getElementById('btnClearCloud');
+const btnClearLocal = document.getElementById('btnClearLocal');
 const messageEl = document.getElementById('message');
 const siteListEl = document.getElementById('siteList');
 const newSiteInput = document.getElementById('newSiteInput');
@@ -32,6 +34,16 @@ function showMessage(text, type) {
   messageEl.textContent = text;
   messageEl.className = 'message show ' + type;
   setTimeout(() => { messageEl.className = 'message'; }, 3000);
+}
+
+// 在目标标签页中执行脚本（绕过 content script 未注入的问题）
+async function executeInTab(tabId, func, ...args) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func,
+    args
+  });
+  return results[0]?.result;
 }
 
 function formatTime(timestamp) {
@@ -96,11 +108,21 @@ async function loadStatus() {
 }
 
 // === Sync Actions ===
+function isRestrictedUrl(url) {
+  return !url || url.startsWith('chrome://') || url.startsWith('chrome-extension://') ||
+    url.startsWith('about:') || url.startsWith('edge://') || url.startsWith('devtools://');
+}
+
 btnUpload.addEventListener('click', async () => {
   btnUpload.disabled = true;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) { showMessage('无法获取当前标签页', 'error'); return; }
+
+    if (isRestrictedUrl(tab.url)) {
+      showMessage('无法在浏览器内部页面上执行操作，请切换到目标网站', 'error');
+      return;
+    }
 
     const checkResp = await chrome.runtime.sendMessage({ type: 'CHECK_SITE_ENABLED', url: tab.url });
     if (!checkResp || !checkResp.enabled) {
@@ -108,9 +130,28 @@ btnUpload.addEventListener('click', async () => {
       return;
     }
 
-    await chrome.tabs.sendMessage(tab.id, { type: 'FORCE_UPLOAD' });
-    showMessage('上传成功！', 'success');
-    setTimeout(loadStatus, 1000);
+    // 直接在页面中执行脚本获取 localStorage 数据
+    const data = await executeInTab(tab.id, () => {
+      const d = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        d[key] = localStorage.getItem(key);
+      }
+      return d;
+    });
+
+    if (!data || Object.keys(data).length === 0) {
+      showMessage('当前页面 localStorage 为空，无需上传', 'info');
+      return;
+    }
+
+    const saveResp = await chrome.runtime.sendMessage({ type: 'SAVE_TO_SYNC', data });
+    if (saveResp && saveResp.success) {
+      showMessage('上传成功！', 'success');
+      setTimeout(loadStatus, 1000);
+    } else {
+      showMessage('上传失败: ' + (saveResp.error || '未知错误'), 'error');
+    }
   } catch (err) {
     showMessage('上传失败: ' + err.message, 'error');
   } finally {
@@ -124,18 +165,87 @@ btnDownload.addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) { showMessage('无法获取当前标签页', 'error'); return; }
 
+    if (isRestrictedUrl(tab.url)) {
+      showMessage('无法在浏览器内部页面上执行操作，请切换到目标网站', 'error');
+      return;
+    }
+
     const checkResp = await chrome.runtime.sendMessage({ type: 'CHECK_SITE_ENABLED', url: tab.url });
     if (!checkResp || !checkResp.enabled) {
       showMessage('当前站点未启用同步，请在「站点管理」中添加', 'info');
       return;
     }
 
-    await chrome.tabs.sendMessage(tab.id, { type: 'FORCE_DOWNLOAD' });
+    // 从云端加载数据
+    const loadResp = await chrome.runtime.sendMessage({ type: 'LOAD_FROM_SYNC' });
+    if (!loadResp || !loadResp.success || !loadResp.result) {
+      showMessage('云端暂无数据', 'info');
+      return;
+    }
+
+    const cloudData = loadResp.result.data;
+    // 直接在页面中写入 localStorage
+    await executeInTab(tab.id, (data) => {
+      localStorage.clear();
+      for (const [key, value] of Object.entries(data)) {
+        localStorage.setItem(key, value);
+      }
+    }, cloudData);
+
     showMessage('下载成功！页面可能需要刷新', 'success');
   } catch (err) {
     showMessage('下载失败: ' + err.message, 'error');
   } finally {
     btnDownload.disabled = false;
+  }
+});
+
+// === Clear Actions ===
+btnClearCloud.addEventListener('click', async () => {
+  if (!confirm('确定要清除云端所有同步数据吗？此操作不可恢复。')) return;
+  btnClearCloud.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'CLEAR_SYNC_DATA' });
+    if (response && response.success) {
+      showMessage('云端数据已清除', 'success');
+      setTimeout(loadStatus, 500);
+    } else {
+      showMessage('清除失败: ' + (response.error || '未知错误'), 'error');
+    }
+  } catch (err) {
+    showMessage('清除失败: ' + err.message, 'error');
+  } finally {
+    btnClearCloud.disabled = false;
+  }
+});
+
+btnClearLocal.addEventListener('click', async () => {
+  if (!confirm('确定要清空当前页面的 localStorage 吗？此操作不可恢复。')) return;
+  btnClearLocal.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) { showMessage('无法获取当前标签页', 'error'); return; }
+
+    if (isRestrictedUrl(tab.url)) {
+      showMessage('无法在浏览器内部页面上执行操作，请切换到目标网站', 'error');
+      return;
+    }
+
+    const checkResp = await chrome.runtime.sendMessage({ type: 'CHECK_SITE_ENABLED', url: tab.url });
+    if (!checkResp || !checkResp.enabled) {
+      showMessage('当前站点未启用同步，请在「站点管理」中添加', 'info');
+      return;
+    }
+
+    // 直接在页面中清除 localStorage
+    await executeInTab(tab.id, () => {
+      localStorage.clear();
+    });
+    showMessage('本地数据已清除，页面可能需要刷新', 'success');
+  } catch (err) {
+    showMessage('清除失败: ' + err.message, 'error');
+  } finally {
+    btnClearLocal.disabled = false;
   }
 });
 

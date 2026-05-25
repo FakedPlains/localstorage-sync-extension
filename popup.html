@@ -101,8 +101,20 @@
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-upload { background: #1976d2; color: white; }
     .btn-download { background: #2e7d32; color: white; }
+    .btn-clear { background: #f57c00; color: white; }
     .btn-add { background: #1976d2; color: white; font-size: 12px; padding: 8px 12px; }
     .btn-danger { background: #c62828; color: white; font-size: 11px; padding: 4px 8px; flex: none; }
+    .clear-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .clear-section .actions { margin-top: 0; }
+    .clear-hint {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #999;
+    }
     .site-list {
       list-style: none;
       background: white;
@@ -198,6 +210,14 @@
     <div class="actions">
       <button class="btn-upload" id="btnUpload">⬆ 上传到云端</button>
       <button class="btn-download" id="btnDownload">⬇ 下载到本地</button>
+    </div>
+
+    <div class="clear-section">
+      <div class="actions">
+        <button class="btn-clear" id="btnClearCloud">🗑 清理云端数据</button>
+        <button class="btn-clear" id="btnClearLocal">🗑 清理本地数据</button>
+      </div>
+      <div class="clear-hint">清理云端将删除 Google 账号中存储的同步数据；清理本地将清空当前页面的 localStorage。</div>
     </div>
 
     <div class="message" id="message"></div>

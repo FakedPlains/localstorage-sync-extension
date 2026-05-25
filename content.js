@@ -159,6 +159,12 @@
       downloadFromSync();
       sendResponse({ success: true });
     }
+    if (message.type === 'CLEAR_LOCAL_STORAGE') {
+      localStorage.clear();
+      console.log('[LS-Sync] Local storage cleared');
+      sendResponse({ success: true });
+      return true;
+    }
     if (message.type === 'GET_LOCAL_STATUS') {
       const data = getAllLocalStorage();
       sendResponse({

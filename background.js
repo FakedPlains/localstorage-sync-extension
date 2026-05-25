@@ -7,7 +7,7 @@
 const SYNC_KEY_PREFIX = 'ls_chunk_';
 const META_KEY = 'ls_meta';
 const CONFIG_KEY = 'ls_config';
-const CHUNK_SIZE = 7000;
+const CHUNK_SIZE = 4000;
 const MAX_TOTAL_SIZE = 102400; // 100KB
 
 // 默认配置
@@ -64,47 +64,56 @@ function unchunkData(chunks) {
 // 保存 localStorage 数据到 chrome.storage.sync
 async function saveToSync(data) {
   const jsonString = JSON.stringify(data);
-  const totalSize = new Blob([jsonString]).size;
+  const totalSize = new TextEncoder().encode(jsonString).length;
 
-  if (totalSize > MAX_TOTAL_SIZE - 1024) {
-    console.warn('[LS-Sync] Data too large:', totalSize, 'bytes');
-    chrome.runtime.sendMessage({
-      type: 'SYNC_ERROR',
-      error: `数据过大 (${(totalSize / 1024).toFixed(1)}KB)，超过 100KB 限制`
-    }).catch(() => {});
-    return false;
+  if (totalSize > MAX_TOTAL_SIZE - 2048) {
+    const errMsg = `数据过大 (${(totalSize / 1024).toFixed(1)}KB)，超过 100KB 限制`;
+    console.warn('[LS-Sync] ' + errMsg);
+    return { success: false, error: errMsg };
   }
 
   const chunks = chunkData(jsonString);
 
-  // 清除旧的分块
-  const oldMeta = await chrome.storage.sync.get(META_KEY);
-  if (oldMeta[META_KEY]) {
-    const oldChunkCount = oldMeta[META_KEY].chunkCount || 0;
-    const keysToRemove = [];
-    for (let i = 0; i < oldChunkCount; i++) {
-      keysToRemove.push(SYNC_KEY_PREFIX + i);
-    }
-    if (keysToRemove.length > 0) {
-      await chrome.storage.sync.remove(keysToRemove);
-    }
+  // 检查分块数是否超过 chrome.storage.sync 的 512 个 key 上限
+  if (chunks.length > 500) {
+    const errMsg = `数据分块过多 (${chunks.length} 块)，超过存储上限`;
+    console.warn('[LS-Sync] ' + errMsg);
+    return { success: false, error: errMsg };
   }
 
-  // 写入新的分块
-  const writeOps = {};
-  for (let i = 0; i < chunks.length; i++) {
-    writeOps[SYNC_KEY_PREFIX + i] = chunks[i];
-  }
-  writeOps[META_KEY] = {
-    chunkCount: chunks.length,
-    timestamp: Date.now(),
-    size: totalSize,
-    keyCount: Object.keys(data).length
-  };
+  try {
+    // 清除旧的分块
+    const oldMeta = await chrome.storage.sync.get(META_KEY);
+    if (oldMeta[META_KEY]) {
+      const oldChunkCount = oldMeta[META_KEY].chunkCount || 0;
+      const keysToRemove = [];
+      for (let i = 0; i < oldChunkCount; i++) {
+        keysToRemove.push(SYNC_KEY_PREFIX + i);
+      }
+      if (keysToRemove.length > 0) {
+        await chrome.storage.sync.remove(keysToRemove);
+      }
+    }
 
-  await chrome.storage.sync.set(writeOps);
-  console.log('[LS-Sync] Saved:', Object.keys(data).length, 'keys,', totalSize, 'bytes');
-  return true;
+    // 写入新的分块
+    const writeOps = {};
+    for (let i = 0; i < chunks.length; i++) {
+      writeOps[SYNC_KEY_PREFIX + i] = chunks[i];
+    }
+    writeOps[META_KEY] = {
+      chunkCount: chunks.length,
+      timestamp: Date.now(),
+      size: totalSize,
+      keyCount: Object.keys(data).length
+    };
+
+    await chrome.storage.sync.set(writeOps);
+    console.log('[LS-Sync] Saved:', Object.keys(data).length, 'keys,', totalSize, 'bytes');
+    return { success: true };
+  } catch (err) {
+    console.error('[LS-Sync] Save failed:', err);
+    return { success: false, error: err.message };
+  }
 }
 
 // 从 chrome.storage.sync 读取数据
@@ -141,6 +150,23 @@ async function loadFromSync() {
   }
 }
 
+// 清除云端所有同步数据
+async function clearSyncData() {
+  const metaResult = await chrome.storage.sync.get(META_KEY);
+  const meta = metaResult[META_KEY];
+
+  const keysToRemove = [META_KEY];
+  if (meta && meta.chunkCount) {
+    for (let i = 0; i < meta.chunkCount; i++) {
+      keysToRemove.push(SYNC_KEY_PREFIX + i);
+    }
+  }
+
+  await chrome.storage.sync.remove(keysToRemove);
+  console.log('[LS-Sync] Cloud data cleared');
+  return true;
+}
+
 // 监听来自 content script 和 popup 的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -151,8 +177,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'SAVE_TO_SYNC':
-      saveToSync(message.data).then(success => {
-        sendResponse({ success });
+      saveToSync(message.data).then(result => {
+        sendResponse(result);
       }).catch(err => {
         sendResponse({ success: false, error: err.message });
       });
@@ -183,6 +209,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'SAVE_CONFIG':
       saveConfig(message.config).then(() => {
         sendResponse({ success: true });
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
+      return true;
+
+    case 'CLEAR_SYNC_DATA':
+      clearSyncData().then(success => {
+        sendResponse({ success });
       }).catch(err => {
         sendResponse({ success: false, error: err.message });
       });
