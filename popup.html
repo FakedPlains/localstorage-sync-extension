@@ -176,6 +176,7 @@
   <div class="tabs">
     <button class="tab active" data-panel="status">同步状态</button>
     <button class="tab" data-panel="sites">站点管理</button>
+    <button class="tab" data-panel="transfer">导入导出</button>
   </div>
 
   <!-- 同步状态面板 -->
@@ -236,6 +237,22 @@
       添加需要同步 localStorage 的站点地址。<br>
       格式：协议+域名+端口，如 https://example.com 或 http://localhost:3000<br>
       所有添加的站点将共享同一份 localStorage 数据。
+    </div>
+  </div>
+
+  <!-- 导入导出面板 -->
+  <div class="panel" id="panel-transfer">
+    <div class="status-card">
+      <p style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.5;">当云端同步不可用时，可通过导出/导入 JSON 文件在设备间手动传输数据。</p>
+      <div class="actions">
+        <button class="btn-upload" id="btnExport">⬇ 导出数据</button>
+        <button class="btn-download" id="btnImport">⬆ 导入数据</button>
+      </div>
+      <input type="file" id="fileInput" accept=".json" style="display:none;">
+    </div>
+    <div class="hint">
+      导出：将当前页面的 localStorage 保存为 JSON 文件。<br>
+      导入：从 JSON 文件恢复数据到当前页面的 localStorage。
     </div>
   </div>
 

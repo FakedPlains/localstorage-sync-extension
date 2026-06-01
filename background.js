@@ -193,8 +193,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'GET_SYNC_STATUS':
-      chrome.storage.sync.get(META_KEY).then(result => {
-        sendResponse({ meta: result[META_KEY] || null });
+      chrome.storage.sync.get(null).then(allData => {
+        const meta = allData[META_KEY] || null;
+        const totalKeys = Object.keys(allData).length;
+        const totalBytes = new TextEncoder().encode(JSON.stringify(allData)).length;
+        sendResponse({ meta, debug: { totalKeys, totalBytes } });
       }).catch(err => {
         sendResponse({ meta: null, error: err.message });
       });

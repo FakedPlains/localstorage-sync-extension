@@ -3,6 +3,7 @@
   "name": "LocalStorage Sync",
   "version": "2.0.0",
   "description": "Sync localStorage data across devices and domains via Google account",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoaoyHOeUAOHBC+AeK/VlZCvAiPJVCb4t7nDXW5WSPpQK5X6Nd02e6vzgUwkC/6bBjKoXjHRNmSMay9iiXAOOT2cNxz9E3PYGliUIoAwMjyknF+Z0CjE6EIh4UMe4AHR7WlPe/PnGg/jw4KDPgkCq8Xd6b3Ok2TizMescP4N8l8Tkf39jvxopeNr/rXD6p0DEQ9bKkmIxoy1ouCMzbC1U8QohFH1si8mYyrJ42SAb1KX6YrrjzZFuoT2Dj2kFJMl/yLS55r2yBLV61znc9a0vI9FicCemZzFL+P4HmTDfrsAfa600tddxMpXs1WQwmKb4vysBIY8eIrSpTtXbX3SdKQIDAQAB",
   "permissions": [
     "storage",
     "scripting"

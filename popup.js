@@ -100,6 +100,13 @@ async function loadStatus() {
     } else {
       syncStatusEl.textContent = '暂无数据';
       syncStatusEl.className = 'status-value warn';
+      // 显示调试信息
+      if (response && response.debug) {
+        const { totalKeys, totalBytes } = response.debug;
+        lastSyncEl.textContent = totalKeys > 0
+          ? `sync 存储有 ${totalKeys} 个 key (${formatSize(totalBytes)})，但无 meta`
+          : 'sync 存储为空，数据可能尚未从 Google 同步到本机';
+      }
     }
   } catch (err) {
     syncStatusEl.textContent = '获取失败';
@@ -320,6 +327,93 @@ btnAddSite.addEventListener('click', async () => {
 // Enter 键添加
 newSiteInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') btnAddSite.click();
+});
+
+// === Import/Export ===
+const btnExport = document.getElementById('btnExport');
+const btnImport = document.getElementById('btnImport');
+const fileInput = document.getElementById('fileInput');
+
+btnExport.addEventListener('click', async () => {
+  btnExport.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) { showMessage('无法获取当前标签页', 'error'); return; }
+
+    if (isRestrictedUrl(tab.url)) {
+      showMessage('无法在浏览器内部页面上执行操作，请切换到目标网站', 'error');
+      return;
+    }
+
+    const data = await executeInTab(tab.id, () => {
+      const d = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        d[key] = localStorage.getItem(key);
+      }
+      return d;
+    });
+
+    if (!data || Object.keys(data).length === 0) {
+      showMessage('当前页面 localStorage 为空', 'info');
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `localstorage-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showMessage(`已导出 ${Object.keys(data).length} 个 key`, 'success');
+  } catch (err) {
+    showMessage('导出失败: ' + err.message, 'error');
+  } finally {
+    btnExport.disabled = false;
+  }
+});
+
+btnImport.addEventListener('click', () => {
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  fileInput.value = '';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) { showMessage('无法获取当前标签页', 'error'); return; }
+
+    if (isRestrictedUrl(tab.url)) {
+      showMessage('无法在浏览器内部页面上执行操作，请切换到目标网站', 'error');
+      return;
+    }
+
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (typeof data !== 'object' || Array.isArray(data)) {
+      showMessage('文件格式错误，需要 JSON 对象', 'error');
+      return;
+    }
+
+    const keyCount = Object.keys(data).length;
+    if (!confirm(`即将导入 ${keyCount} 个 key 到当前页面，会覆盖现有 localStorage，确定继续？`)) return;
+
+    await executeInTab(tab.id, (importData) => {
+      localStorage.clear();
+      for (const [key, value] of Object.entries(importData)) {
+        localStorage.setItem(key, value);
+      }
+    }, data);
+
+    showMessage(`已导入 ${keyCount} 个 key，页面可能需要刷新`, 'success');
+  } catch (err) {
+    showMessage('导入失败: ' + err.message, 'error');
+  }
 });
 
 // === Init ===
